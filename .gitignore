@@ -1,0 +1,21 @@
+# --- Security (CRITICAL) ---
+.env
+db.sqlite3
+*.log
+
+# --- Python & Environment ---
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- IDE Settings (VS Code, PyCharm) ---
+.vscode/
+.idea/
+
+# --- Django Specific ---
+static/
+media/
