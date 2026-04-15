@@ -11,15 +11,16 @@ sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
 
 # 3. Initialize Environment Variables
 env = environ.Env()
-# Read .env file from the Root folder
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 # 4. Security
 SECRET_KEY = env('SECRET_KEY', default='django-insecure-v2nf($8m8792o(zr0#etqvx9c*%23zku#(&d5a^9%-)5s9axiq')
-DEBUG = env.bool('DEBUG', default=True)
 
-# Production mein yahan aapki site ka domain aayega
-ALLOWED_HOSTS = ['*'] 
+# Production mein DEBUG False hona chahiye
+DEBUG = env.bool('DEBUG', default=False)
+
+# Railway domain aur localhost allow karne ke liye
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
 
 # 5. Application Definition
 INSTALLED_APPS = [
@@ -31,18 +32,22 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     # Third-Party Apps
+    'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
     'drf_spectacular',
-    'django_filters', 
+    'django_filters',
+    'django_celery_beat', 
 
     # Local Apps
+    'notifications',
     'tasks',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # <--- Essential for Live Hosting
+    'corsheaders.middleware.CorsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware', # Static files ke liye zaroori
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -70,19 +75,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'core.wsgi.application'
 
-# 6. Database Configuration
+# 6. Database Configuration (Railway Optimized)
+# Ye automatically DATABASE_URL uthayega jo Railway provide karta hai
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': env('MYSQLDATABASE', default='railway'),
-        'USER': env('MYSQLUSER', default='root'),
-        'PASSWORD': env('MYSQLPASSWORD', default=''),
-        'HOST': env('MYSQLHOST', default='mysql.railway.internal'),
-        'PORT': env('MYSQLPORT', default='3306'),
-    }
+    'default': env.db_url('DATABASE_URL', default=f"mysql://{env('MYSQLUSER')}:{env('MYSQLPASSWORD')}@{env('MYSQLHOST')}:{env('MYSQLPORT')}/{env('MYSQLDATABASE')}")
 }
 
-# 7. Django REST Framework Settings
+# 7. Django REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
@@ -91,46 +90,38 @@ REST_FRAMEWORK = {
     ),
 }
 
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'SyncUp Task Management API',
-    'DESCRIPTION': 'Professional Task Management System',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-    'COMPONENT_SPLIT_PATCH': True,
-    'COMPONENT_NO_READ_ONLY_REQUIRED': True,
-    'SECURITY': [
-        {'BearerAuth': []},
-    ],
-    'APPEND_COMPONENTS': {
-        "securitySchemes": {
-            "BearerAuth": {
-                "type": "http",
-                "scheme": "bearer",
-                "bearerFormat": "JWT",
-            }
-        }
+# 8. Celery & Redis Configuration
+CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+
+CELERY_BEAT_SCHEDULE = {
+    'send-reminders-every-day': {
+        'task': 'notifications.tasks.send_deadline_reminders',
+        'schedule': 86400.0,
     },
 }
 
-# 8. Password Validation
-AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
-]
+# 9. Email Settings
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')
 
-# 9. Static & Language Settings
-LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
-USE_I18N = True
-USE_TZ = True
-
+# 10. Static & Files (WhiteNoise Setup)
 STATIC_URL = 'static/'
-# Production mein static files yahan collect hongi
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles') 
-
-# WhiteNoise optimization for storage
+# Live server par static files serve karne ke liye engine
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
+# CSRF security for Production
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.railway.app",
+]
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+CORS_ALLOW_ALL_ORIGINS = True

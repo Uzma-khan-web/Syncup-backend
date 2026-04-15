@@ -1,24 +1,20 @@
 from rest_framework import serializers
-from .models import Task
+from .models import Task, Project, SubTask, Profile
 from django.contrib.auth.models import User
 
-# 1. For viewing user info (Keep this as is)
+# --- User Serializers ---
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email']
 
-# 2. NEW: For creating new users (Registration)
 class UserRegistrationSerializer(serializers.ModelSerializer):
-    # We want the password to be write-only so it never shows up in GET responses
     password = serializers.CharField(write_only=True)
-
     class Meta:
         model = User
         fields = ['username', 'password', 'email']
 
     def create(self, validated_data):
-        # Use create_user so Django hashes the password (encrypts it)
         user = User.objects.create_user(
             username=validated_data['username'],
             email=validated_data.get('email', ''),
@@ -26,15 +22,39 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         )
         return user
 
-# 3. For Tasks (Keep this as is)
+# --- Project Serializer ---
+class ProjectSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Project
+        fields = ['id', 'name', 'description', 'created_at', 'created_by']
+        read_only_fields = ['id', 'created_at', 'created_by']
+
+# --- SubTask Serializer ---
+class SubTaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubTask
+        fields = ['id', 'title', 'is_completed']
+
+# --- Task Serializer ---
 class TaskSerializer(serializers.ModelSerializer):
     assigned_to_details = UserSerializer(source='assigned_to', read_only=True)
-
+    project_details = ProjectSerializer(source='project', read_only=True)
+    subtasks = SubTaskSerializer(many=True, read_only=True)
+    
     class Meta:
         model = Task
         fields = [
-            'id', 'title', 'description', 'status', 
-            'priority', 'assigned_to', 'assigned_to_details', 
-            'created_at', 'due_date'
+            'id', 'project', 'project_details', 'title', 'description', 
+            'status', 'priority', 'assigned_to', 'assigned_to_details', 
+            'subtasks', 'due_date', 'created_at'
         ]
         read_only_fields = ['id', 'created_at', 'assigned_to']
+
+# --- Profile Serializer ---
+class ProfileSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
+
+    class Meta:
+        model = Profile
+        fields = ['username', 'email', 'bio', 'profile_pic', 'location']
